@@ -1,0 +1,45 @@
+#!/usr/bin/env python3
+import sys, os, shutil
+
+NAME = "bman"
+
+data_dir = os.path.expanduser(f"~/.local/share/{NAME}/")
+config_dir = os.path.expanduser(f"~/.local/share/{NAME}/")
+
+if not os.path.isdir(data_dir):
+    os.mkdir(data_dir)
+if not os.path.isdir(config_dir):
+    os.mkdir(config_dir)
+
+def assert_n_args(n):
+    if len(sys.argv) != n:
+        exit(f"{NAME}: expected {n} arguments")
+
+def install_package(pkg_name, repo_link):
+    os.chdir(f"{data_dir}")
+    os.system(f"git clone {repo_link} {pkg_name} --depth 1")
+    os.chdir(pkg_name)
+    os.system("make")
+
+def remove_package(pkg_name):
+    shutil.rmtree(f"{data_dir}/{pkg_name}")
+
+def update_packages():
+    os.chdir(f"{data_dir}")
+    for pkg in os.listdir():
+        os.chdir(f"{data_dir}/{pkg}")
+        os.system("git pull")
+        os.system("make")
+
+if len(sys.argv) < 2:
+    exit(f"{NAME}: not enough arguments")
+
+if sys.argv[1] == "install":
+    assert_n_args(4)
+    install_package(sys.argv[2], sys.argv[3])
+elif sys.argv[1] == "remove":
+    assert_n_args(3)
+    remove_package(sys.argv[2])
+elif sys.argv[1] == "update":
+    assert_n_args(2)
+    update_packages()
