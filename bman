@@ -15,12 +15,12 @@
 # You should have received a copy of the GNU General Public License along with
 # this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import sys, os, shutil
+import sys, os, shutil, subprocess, json
 
 NAME = "bman"
 
-data_dir = os.path.expanduser(f"~/.local/share/{NAME}/")
-config_dir = os.path.expanduser(f"~/.local/share/{NAME}/")
+data_dir = os.path.expanduser(f"~/.local/share/{NAME}")
+config_dir = os.path.expanduser(f"~/.config/{NAME}")
 
 if not os.path.isdir(data_dir):
     os.mkdir(data_dir)
@@ -31,18 +31,25 @@ def assert_n_args(n):
     if len(sys.argv) != n:
         exit(f"{NAME}: expected {n} arguments")
 
-def install_package(pkg_name, repo_link):
+def install_package(pkg_name, config):
+    with open(f"{config_dir}/{pkg_name}.json", "w") as f:
+        json.dump(config, f)
     os.chdir(f"{data_dir}")
-    os.system(f"git clone {repo_link} {pkg_name} --depth 1")
+    os.system(f"git clone {config["source"]["remote"]} {pkg_name} --depth 1")
     os.chdir(pkg_name)
     os.system("make")
 
 def remove_package(pkg_name):
     shutil.rmtree(f"{data_dir}/{pkg_name}")
+    os.remove(f"{config_dir}/{pkg_name}.json")
 
 def update_packages():
-    os.chdir(f"{data_dir}")
-    for pkg in os.listdir():
+    for pkg in os.listdir(config_dir):
+        if not pkg.endswith(".json"):
+            continue
+        with open(f"{config_dir}/{pkg}") as f:
+            config = json.load(f)
+        pkg = pkg[:-5]
         os.chdir(f"{data_dir}/{pkg}")
         os.system("git pull")
         os.system("make")
@@ -52,10 +59,19 @@ if len(sys.argv) < 2:
 
 if sys.argv[1] == "install":
     assert_n_args(4)
-    install_package(sys.argv[2], sys.argv[3])
+    install_package(sys.argv[2], {
+        "source": {
+            "type": "git",
+            "remote": sys.argv[3],
+        }
+    })
 elif sys.argv[1] == "remove":
     assert_n_args(3)
     remove_package(sys.argv[2])
 elif sys.argv[1] == "update":
     assert_n_args(2)
     update_packages()
+elif sys.argv[1] == "reset":
+    assert_n_args(2)
+    shutil.rmtree(data_dir)
+    shutil.rmtree(config_dir)
