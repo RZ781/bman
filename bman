@@ -27,17 +27,21 @@ if not os.path.isdir(data_dir):
 if not os.path.isdir(config_dir):
     os.mkdir(config_dir)
 
-def assert_n_args(n):
-    if len(sys.argv) != n:
-        exit(f"{NAME}: expected {n} arguments")
+def assert_n_args(minimum, maximum=None):
+    if maximum is None:
+        maximum = minimum
+    if len(sys.argv) < minimum:
+        exit(f"{NAME}: expected at least {minimum} arguments")
+    if len(sys.argv) > maximum:
+        exit(f"{NAME}: expected at most {maximum} arguments")
 
 def install_package(pkg_name, config):
-    with open(f"{config_dir}/{pkg_name}.json", "w") as f:
-        json.dump(config, f)
     os.chdir(f"{data_dir}")
     os.system(f"git clone {config["source"]["remote"]} {pkg_name} --depth 1")
     os.chdir(pkg_name)
-    os.system("make")
+    os.system(config["build"]["command"])
+    with open(f"{config_dir}/{pkg_name}.json", "w") as f:
+        json.dump(config, f)
 
 def remove_package(pkg_name):
     shutil.rmtree(f"{data_dir}/{pkg_name}")
@@ -52,17 +56,21 @@ def update_packages():
         pkg = pkg[:-5]
         os.chdir(f"{data_dir}/{pkg}")
         os.system("git pull")
-        os.system("make")
+        os.system(config["build"]["command"])
 
 if len(sys.argv) < 2:
     exit(f"{NAME}: not enough arguments")
 
 if sys.argv[1] == "install":
-    assert_n_args(4)
+    assert_n_args(4, 5)
     install_package(sys.argv[2], {
         "source": {
             "type": "git",
             "remote": sys.argv[3],
+        },
+        "build": {
+            "type": "command",
+            "command": sys.argv[4] if len(sys.argv) == 5 else "make -j${nproc}",
         }
     })
 elif sys.argv[1] == "remove":
