@@ -31,9 +31,9 @@ def assert_n_args(minimum, maximum=None):
     if maximum is None:
         maximum = minimum
     if len(sys.argv) < minimum:
-        exit(f"{NAME}: expected at least {minimum} arguments")
+        exit(f"{NAME}: expected at least {minimum} arguments, got {len(sys.argv)}")
     if len(sys.argv) > maximum:
-        exit(f"{NAME}: expected at most {maximum} arguments")
+        exit(f"{NAME}: expected at most {maximum} arguments, got {len(sys.argv)}")
 
 def install_package(pkg_name, config):
     os.chdir(f"{data_dir}")
@@ -59,7 +59,7 @@ def update_packages():
         os.system(config["build"]["command"])
 
 if len(sys.argv) < 2:
-    exit(f"{NAME}: not enough arguments")
+    exit(f"{NAME}: no command provided")
 
 if sys.argv[1] == "install":
     assert_n_args(4, 5)
@@ -83,3 +83,5 @@ elif sys.argv[1] == "reset":
     assert_n_args(2)
     shutil.rmtree(data_dir)
     shutil.rmtree(config_dir)
+else:
+    exit(f"{NAME}: unknown command {sys.argv[1]}")
