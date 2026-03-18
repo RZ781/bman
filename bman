@@ -15,7 +15,19 @@
 # You should have received a copy of the GNU General Public License along with
 # this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import sys, os, shutil, subprocess, json
+import sys, os, shutil, subprocess, json, typing
+
+class GitSourceConfig(typing.TypedDict):
+    type: typing.Literal["git"]
+    remote: str
+
+class CommandBuildConfig(typing.TypedDict):
+    type: typing.Literal["command"]
+    command: str
+
+class PackageConfig(typing.TypedDict):
+    source: GitSourceConfig
+    build: CommandBuildConfig
 
 NAME = "bman"
 
@@ -27,7 +39,7 @@ if not os.path.isdir(data_dir):
 if not os.path.isdir(config_dir):
     os.mkdir(config_dir)
 
-def assert_n_args(minimum, maximum=None):
+def assert_n_args(minimum: int, maximum: int | None = None) -> None:
     if maximum is None:
         maximum = minimum
     if len(sys.argv) < minimum:
@@ -35,7 +47,7 @@ def assert_n_args(minimum, maximum=None):
     if len(sys.argv) > maximum:
         exit(f"{NAME}: expected at most {maximum} arguments, got {len(sys.argv)}")
 
-def install_package(pkg_name, config):
+def install_package(pkg_name: str, config: PackageConfig) -> None:
     os.chdir(f"{data_dir}")
     os.system(f"git clone {config["source"]["remote"]} {pkg_name} --depth 1")
     os.chdir(pkg_name)
@@ -43,16 +55,16 @@ def install_package(pkg_name, config):
     with open(f"{config_dir}/{pkg_name}.json", "w") as f:
         json.dump(config, f)
 
-def remove_package(pkg_name):
+def remove_package(pkg_name: str) -> None:
     shutil.rmtree(f"{data_dir}/{pkg_name}")
     os.remove(f"{config_dir}/{pkg_name}.json")
 
-def update_packages():
+def update_packages() -> None:
     for pkg in os.listdir(config_dir):
         if not pkg.endswith(".json"):
             continue
         with open(f"{config_dir}/{pkg}") as f:
-            config = json.load(f)
+            config: PackageConfig = json.load(f)
         pkg = pkg[:-5]
         os.chdir(f"{data_dir}/{pkg}")
         os.system("git pull")
