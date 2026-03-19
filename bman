@@ -48,10 +48,8 @@ def assert_n_args(minimum: int, maximum: int | None = None) -> None:
         exit(f"{NAME}: expected at most {maximum} arguments, got {len(sys.argv)}")
 
 def install_package(pkg_name: str, config: PackageConfig) -> None:
-    os.chdir(f"{data_dir}")
-    os.system(f"git clone {config["source"]["remote"]} {pkg_name} --depth 1")
-    os.chdir(pkg_name)
-    os.system(config["build"]["command"])
+    subprocess.run(["git", "clone", config["source"]["remote"], pkg_name, "--depth", "1"], cwd=data_dir)
+    subprocess.run(config["build"]["command"], cwd=f"{data_dir}/{pkg_name}", shell=True)
     with open(f"{config_dir}/{pkg_name}.json", "w") as f:
         json.dump(config, f)
 
@@ -67,8 +65,8 @@ def update_packages() -> None:
             config: PackageConfig = json.load(f)
         pkg = pkg[:-5]
         os.chdir(f"{data_dir}/{pkg}")
-        os.system("git pull")
-        os.system(config["build"]["command"])
+        subprocess.run(["git", "pull"], cwd=f"{data_dir}/{pkg}")
+        subprocess.run(config["build"]["command"], cwd=f"{data_dir}/{pkg}", shell=True)
 
 if len(sys.argv) < 2:
     exit(f"{NAME}: no command provided")
