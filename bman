@@ -91,4 +91,5 @@ elif args.command == "reset":
     shutil.rmtree(data_dir)
     shutil.rmtree(config_dir)
 else:
-    exit(f"{NAME}: no command specified")
+    parser.print_help()
+    parser.exit(1)
