@@ -29,15 +29,8 @@ class PackageConfig(typing.TypedDict):
     source: GitSourceConfig
     build: CommandBuildConfig
 
-NAME = "bman"
-
-data_dir = os.path.expanduser(f"~/.local/share/{NAME}")
-config_dir = os.path.expanduser(f"~/.config/{NAME}")
-
-if not os.path.isdir(data_dir):
-    os.mkdir(data_dir)
-if not os.path.isdir(config_dir):
-    os.mkdir(config_dir)
+data_dir = os.path.expanduser(f"~/.local/share/bman")
+config_dir = os.path.expanduser(f"~/.config/bman")
 
 def install_package(pkg_name: str, config: PackageConfig) -> None:
     subprocess.run(["git", "clone", config["source"]["remote"], pkg_name, "--depth", "1"], cwd=data_dir)
@@ -60,36 +53,45 @@ def update_packages() -> None:
         subprocess.run(["git", "pull"], cwd=f"{data_dir}/{pkg}")
         subprocess.run(config["build"]["command"], cwd=f"{data_dir}/{pkg}", shell=True)
 
-parser = argparse.ArgumentParser(description="manage packages built from upstream sources")
-subparsers = parser.add_subparsers(dest="command")
-install = subparsers.add_parser("install", help="install a package")
-install.add_argument("name", help="package name")
-install.add_argument("repo", help="package repository URL")
-install.add_argument("--build", default="make -j$(nproc)", help="build command")
-remove = subparsers.add_parser("remove", help="remove a package")
-remove.add_argument("name")
-subparsers.add_parser("update", help="update all packages")
-subparsers.add_parser("reset", help="delete all packages and data")
-args = parser.parse_args()
+def main():
+    if not os.path.isdir(data_dir):
+        os.mkdir(data_dir)
+    if not os.path.isdir(config_dir):
+        os.mkdir(config_dir)
 
-if args.command == "install":
-    install_package(args.name, {
-        "source": {
-            "type": "git",
-            "remote": args.repo,
-        },
-        "build": {
-            "type": "command",
-            "command": args.build,
-        }
-    })
-elif args.command == "remove":
-    remove_package(args.name)
-elif args.command == "update":
-    update_packages()
-elif args.command == "reset":
-    shutil.rmtree(data_dir)
-    shutil.rmtree(config_dir)
-else:
-    parser.print_help()
-    parser.exit(1)
+    parser = argparse.ArgumentParser(description="manage packages built from upstream sources")
+    subparsers = parser.add_subparsers(dest="command")
+    install = subparsers.add_parser("install", help="install a package")
+    install.add_argument("name", help="package name")
+    install.add_argument("repo", help="package repository URL")
+    install.add_argument("--build", default="make -j$(nproc)", help="build command")
+    remove = subparsers.add_parser("remove", help="remove a package")
+    remove.add_argument("name")
+    subparsers.add_parser("update", help="update all packages")
+    subparsers.add_parser("reset", help="delete all packages and data")
+    args = parser.parse_args()
+
+    if args.command == "install":
+        install_package(args.name, {
+            "source": {
+                "type": "git",
+                "remote": args.repo,
+            },
+            "build": {
+                "type": "command",
+                "command": args.build,
+            }
+        })
+    elif args.command == "remove":
+        remove_package(args.name)
+    elif args.command == "update":
+        update_packages()
+    elif args.command == "reset":
+        shutil.rmtree(data_dir)
+        shutil.rmtree(config_dir)
+    else:
+        parser.print_help()
+        parser.exit(1)
+
+if __name__ == "__main__":
+    main()
