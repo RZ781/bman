@@ -34,6 +34,7 @@ config_dir = os.path.expanduser(f"~/.config/bman")
 
 def install_package(pkg_name: str, config: PackageConfig) -> None:
     subprocess.run(["git", "clone", config["source"]["remote"], pkg_name, "--depth", "1"], cwd=data_dir)
+    subprocess.run(["git", "submodule", "update", "--init"], cwd=f"{data_dir}/{pkg_name}")
     subprocess.run(config["build"]["command"], cwd=f"{data_dir}/{pkg_name}", shell=True)
     with open(f"{config_dir}/{pkg_name}.json", "w") as f:
         json.dump(config, f)
@@ -51,6 +52,7 @@ def update_packages() -> None:
         pkg = pkg[:-5]
         os.chdir(f"{data_dir}/{pkg}")
         subprocess.run(["git", "pull"], cwd=f"{data_dir}/{pkg}")
+        subprocess.run(["git", "submodule", "update"], cwd=f"{data_dir}/{pkg}")
         subprocess.run(config["build"]["command"], cwd=f"{data_dir}/{pkg}", shell=True)
 
 def main():
