@@ -55,7 +55,7 @@ def update_packages() -> None:
         subprocess.run(["git", "submodule", "update"], cwd=f"{data_dir}/{pkg}")
         subprocess.run(config["build"]["command"], cwd=f"{data_dir}/{pkg}", shell=True)
 
-def main():
+def main() -> None:
     if not os.path.isdir(data_dir):
         os.mkdir(data_dir)
     if not os.path.isdir(config_dir):

@@ -2,7 +2,7 @@ name: mypy type check
 on: [push]
 jobs:
   mypy:
-    runs-on: ubuntu-slim-latest
+    runs-on: ubuntu-slim
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
