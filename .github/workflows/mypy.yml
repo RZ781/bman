@@ -1,0 +1,11 @@
+name: mypy type check
+on: [push]
+jobs:
+  mypy:
+    runs-on: ubuntu-slim-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+      - name: Run mypy
+        run: mypy bman --strict
+
