@@ -6,6 +6,12 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - name: Install mypy
+        run: pip install mypy
       - name: Run mypy
         run: mypy bman --strict
 
