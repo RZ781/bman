@@ -29,8 +29,8 @@ class PackageConfig(typing.TypedDict):
     source: GitSourceConfig
     build: CommandBuildConfig
 
-data_dir = os.path.expanduser(f"~/.local/share/bman")
-config_dir = os.path.expanduser(f"~/.config/bman")
+data_dir = os.environ.get("BMAN_DATA_DIR", os.path.expanduser(f"~/.local/share/bman"))
+config_dir = os.environ.get("BMAN_CONFIG_DIR", os.path.expanduser(f"~/.config/bman"))
 
 def install_package(pkg_name: str, config: PackageConfig) -> None:
     subprocess.run(["git", "clone", config["source"]["remote"], pkg_name, "--depth", "1"], cwd=data_dir)
@@ -50,7 +50,6 @@ def update_packages() -> None:
         with open(f"{config_dir}/{pkg}") as f:
             config: PackageConfig = json.load(f)
         pkg = pkg[:-5]
-        os.chdir(f"{data_dir}/{pkg}")
         subprocess.run(["git", "pull"], cwd=f"{data_dir}/{pkg}")
         subprocess.run(["git", "submodule", "update"], cwd=f"{data_dir}/{pkg}")
         subprocess.run(config["build"]["command"], cwd=f"{data_dir}/{pkg}", shell=True)
