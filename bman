@@ -69,7 +69,7 @@ def main() -> None:
     install.add_argument("repo", help="package repository URL")
     install.add_argument("--build", default="make -j$(nproc)", help="build command")
     remove = subparsers.add_parser("remove", help="remove a package")
-    remove.add_argument("name")
+    remove.add_argument("name", nargs="*", help="package names")
     update = subparsers.add_parser("update", help="update all packages")
     update.add_argument("name", nargs="*", help="package names")
     subparsers.add_parser("reset", help="delete all packages and data")
@@ -87,7 +87,8 @@ def main() -> None:
             }
         })
     elif args.command == "remove":
-        remove_package(args.name)
+        for name in args.name:
+            remove_package(name)
     elif args.command == "update":
         if len(args.name) == 0:
             update_packages()
