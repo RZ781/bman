@@ -20,6 +20,7 @@ import os, shutil, subprocess, json, typing, argparse
 class GitSourceConfig(typing.TypedDict):
     type: typing.Literal["git"]
     remote: str
+    branch: typing.Optional[str]
 
 class CommandBuildConfig(typing.TypedDict):
     type: typing.Literal["command"]
@@ -33,7 +34,10 @@ data_dir = os.environ.get("BMAN_DATA_DIR", os.path.expanduser(f"~/.local/share/b
 config_dir = os.environ.get("BMAN_CONFIG_DIR", os.path.expanduser(f"~/.config/bman"))
 
 def install_package(pkg_name: str, config: PackageConfig) -> None:
-    subprocess.run(["git", "clone", config["source"]["remote"], pkg_name, "--depth", "1"], cwd=data_dir)
+    clone_command = ["git", "clone", config["source"]["remote"], pkg_name, "--depth", "1"]
+    if config["source"]["branch"] is not None:
+        clone_command += ["--branch", config["source"]["branch"]]
+    subprocess.run(clone_command, cwd=data_dir)
     subprocess.run(["git", "submodule", "update", "--init"], cwd=f"{data_dir}/{pkg_name}")
     subprocess.run(config["build"]["command"], cwd=f"{data_dir}/{pkg_name}", shell=True)
     with open(f"{config_dir}/{pkg_name}.json", "w") as f:
@@ -68,6 +72,7 @@ def main() -> None:
     install.add_argument("name", help="package name")
     install.add_argument("repo", help="package repository URL")
     install.add_argument("--build", default="make -j$(nproc)", help="build command")
+    install.add_argument("--branch", default=None, help="target branch")
     remove = subparsers.add_parser("remove", help="remove a package")
     remove.add_argument("name", nargs="*", help="package names")
     update = subparsers.add_parser("update", help="update all packages")
@@ -80,6 +85,7 @@ def main() -> None:
             "source": {
                 "type": "git",
                 "remote": args.repo,
+                "branch": args.branch
             },
             "build": {
                 "type": "command",
