@@ -1,0 +1,11 @@
+{
+	"source": {
+		"type": "git",
+		"remote": "https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git",
+		"branch": "linux-rolling-stable"
+	},
+	"build": {
+		"type": "command",
+		"command": "make defconfig -j$(nproc) && make -j$(nproc)"
+	}
+}
