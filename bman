@@ -21,17 +21,29 @@ class GitSourceConfig(typing.TypedDict):
     type: typing.Literal["git"]
     remote: str
     branch: typing.Optional[str]
+SourceConfig = GitSourceConfig
 
+class MakeBuildConfig(typing.TypedDict):
+    type: typing.Literal["make"]
 class CommandBuildConfig(typing.TypedDict):
     type: typing.Literal["command"]
     command: str
+BuildConfig = MakeBuildConfig | CommandBuildConfig
 
 class PackageConfig(typing.TypedDict):
-    source: GitSourceConfig
-    build: CommandBuildConfig
+    source: SourceConfig
+    build: BuildConfig
 
 data_dir = os.environ.get("BMAN_DATA_DIR", os.path.expanduser(f"~/.local/share/bman"))
 config_dir = os.environ.get("BMAN_CONFIG_DIR", os.path.expanduser(f"~/.config/bman"))
+
+def build_package(pkg_name: str, config: PackageConfig) -> None:
+    if config["build"]["type"] == "make":
+        subprocess.run(["make", f"-j{os.cpu_count()}"], cwd=f"{data_dir}/{pkg_name}")
+    elif config["build"]["type"] == "command":
+        subprocess.run(config["build"]["command"], cwd=f"{data_dir}/{pkg_name}", shell=True)
+    else:
+        raise Exception(f"unknown build type {config.build.type}")
 
 def install_package(pkg_name: str, config: PackageConfig) -> None:
     clone_command = ["git", "clone", config["source"]["remote"], pkg_name, "--depth", "1"]
@@ -39,7 +51,7 @@ def install_package(pkg_name: str, config: PackageConfig) -> None:
         clone_command += ["--branch", config["source"]["branch"]]
     subprocess.run(clone_command, cwd=data_dir)
     subprocess.run(["git", "submodule", "update", "--init"], cwd=f"{data_dir}/{pkg_name}")
-    subprocess.run(config["build"]["command"], cwd=f"{data_dir}/{pkg_name}", shell=True)
+    build_package(pkg_name, config)
     with open(f"{config_dir}/{pkg_name}.json", "w") as f:
         json.dump(config, f)
 
@@ -52,7 +64,7 @@ def update_package(pkg_name: str) -> None:
         config: PackageConfig = json.load(f)
     subprocess.run(["git", "pull"], cwd=f"{data_dir}/{pkg_name}")
     subprocess.run(["git", "submodule", "update"], cwd=f"{data_dir}/{pkg_name}")
-    subprocess.run(config["build"]["command"], cwd=f"{data_dir}/{pkg_name}", shell=True)
+    build_package(pkg_name, config)
 
 def update_packages() -> None:
     for pkg in os.listdir(config_dir):
@@ -72,7 +84,7 @@ def main() -> None:
     install = subparsers.add_parser("install", help="install a package")
     install.add_argument("name", help="package name")
     install.add_argument("repo", help="package repository URL")
-    install.add_argument("--build", default="make -j$(nproc)", help="build command")
+    install.add_argument("--build", help="build command")
     install.add_argument("--branch", default=None, help="target branch")
 
     install_config = subparsers.add_parser("install-config", help="install a package from a config file")
@@ -93,20 +105,14 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.command == "install":
-        install_package(args.name, {
-            "source": {
-                "type": "git",
-                "remote": args.repo,
-                "branch": args.branch
-            },
-            "build": {
-                "type": "command",
-                "command": args.build,
-            }
-        })
+        config = PackageConfig(
+            source = GitSourceConfig(type="git", remote=args.repo, branch=args.branch),
+            build = MakeBuildConfig(type="make") if args.build is None else CommandBuildConfig(type="command", command=args.build)
+        )
+        install_package(args.name, config)
     elif args.command == "install-config":
         with open(args.config) as f:
-            config: PackageConfig = json.load(f)
+            config = json.load(f)
         install_package(args.name, config)
     elif args.command == "remove":
         for name in args.name:
