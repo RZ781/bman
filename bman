@@ -15,24 +15,107 @@
 # You should have received a copy of the GNU General Public License along with
 # this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import os, shutil, subprocess, json, typing, argparse
+import os, shutil, subprocess, json, argparse
+from typing import Any, Optional
 
-class GitSourceConfig(typing.TypedDict):
-    type: typing.Literal["git"]
-    remote: str
-    branch: typing.Optional[str]
-SourceConfig = GitSourceConfig
+json_dict = dict[str, Any]
 
-class MakeBuildConfig(typing.TypedDict):
-    type: typing.Literal["make"]
-class CommandBuildConfig(typing.TypedDict):
-    type: typing.Literal["command"]
-    command: str
-BuildConfig = MakeBuildConfig | CommandBuildConfig
+class SourceConfig:
+    def to_json(self) -> json_dict: raise NotImplementedError
+    def get_clean_source(self, pkg_name: str) -> None: raise NotImplementedError
+    def update_source(self, pkg_name: str) -> None: raise NotImplementedError
+    @staticmethod
+    def from_json(json: json_dict) -> "SourceConfig":
+        if "type" not in json:
+            raise Exception("source configuration does not contain type")
+        if json["type"] == "git":
+            if "remote" not in json:
+                raise Exception("git configuration does not contain remote")
+            elif "branch" not in json:
+                raise Exception("git configuration does not contain branch")
+            return GitSourceConfig(json["remote"], json["branch"])
+        else:
+            raise Exception(f"source configuration has unknown type {json["type"]}")
 
-class PackageConfig(typing.TypedDict):
-    source: SourceConfig
-    build: BuildConfig
+class GitSourceConfig(SourceConfig):
+    def __init__(self, remote: str, branch: str):
+        self.remote = remote
+        self.branch = branch
+    def to_json(self) -> json_dict:
+        return {"type": "git", "remote": self.remote, "branch": self.branch}
+    def get_clean_source(self, pkg_name: str) -> None:
+        clone_command = ["git", "clone", self.remote, pkg_name, "--depth", "1"]
+        if self.branch is not None:
+            clone_command += ["--branch", self.branch]
+        subprocess.run(clone_command, cwd=data_dir)
+        subprocess.run(["git", "submodule", "update", "--init"], cwd=f"{data_dir}/{pkg_name}")
+    def update_source(self, pkg_name: str) -> None:
+        subprocess.run(["git", "pull"], cwd=f"{data_dir}/{pkg_name}")
+        subprocess.run(["git", "submodule", "update"], cwd=f"{data_dir}/{pkg_name}")
+
+class BuildConfig:
+    def to_json(self) -> json_dict: raise NotImplementedError
+    def build(self, pkg_name: str) -> None: raise NotImplementedError
+    @staticmethod
+    def from_json(json: json_dict) -> "BuildConfig":
+        if "type" not in json:
+            raise Exception("build configuration does not contain type")
+        if json["type"] == "make":
+            return MakeBuildConfig()
+        elif json["type"] == "command":
+            if "command" not in json:
+                raise Exception("command build configuration does not contain command")
+            return CommandBuildConfig(json["command"])
+        else:
+            raise Exception(f"build configuration has unknown type {json["type"]}")
+
+class MakeBuildConfig(BuildConfig):
+    def to_json(self) -> json_dict:
+        return {"type": "make"}
+    def build(self, pkg_name: str) -> None:
+        subprocess.run(["make", f"-j{os.cpu_count()}"], cwd=f"{data_dir}/{pkg_name}")
+
+class CommandBuildConfig(BuildConfig):
+    def __init__(self, command: str):
+        self.command = command
+    def to_json(self) -> json_dict:
+        return {"type": "command", "command": self.command}
+    def build(self, pkg_name: str) -> None:
+        subprocess.run(self.command, cwd=f"{data_dir}/{pkg_name}", shell=True)
+
+class Package:
+    def __init__(self, name: str, source: SourceConfig, build: BuildConfig):
+        self.name = name
+        self.source = source
+        self.build = build
+    def to_json(self) -> json_dict:
+        return {"source": self.source.to_json(), "build": self.build.to_json()}
+    def install(self) -> None:
+        self.source.get_clean_source(self.name)
+        self.build.build(self.name)
+        with open(f"{config_dir}/{self.name}.json", "w") as f:
+            json.dump(self.to_json(), f)
+    def remove(self) -> None:
+        assert_package_exists(self.name)
+        shutil.rmtree(f"{data_dir}/{self.name}")
+        os.remove(f"{config_dir}/{self.name}.json")
+    def update(self) -> None:
+        assert_package_exists(self.name)
+        self.source.update_source(self.name)
+        self.build.build(self.name)
+    @staticmethod
+    def from_json(pkg_name: str, json: json_dict) -> "Package":
+        if "source" not in json:
+            raise Exception("configuration does not contain source")
+        if "build" not in json:
+            raise Exception("configuration does not contain build")
+        return Package(pkg_name, SourceConfig.from_json(json["source"]), BuildConfig.from_json(json["build"]))
+    @staticmethod
+    def from_name(pkg_name: str) -> "Package":
+        assert_package_exists(pkg_name)
+        with open(f"{config_dir}/{pkg_name}.json") as f:
+            config = json.load(f)
+        return Package.from_json(pkg_name, config)
 
 data_dir = os.environ.get("BMAN_DATA_DIR", os.path.expanduser(f"~/.local/share/bman"))
 config_dir = os.environ.get("BMAN_CONFIG_DIR", os.path.expanduser(f"~/.config/bman"))
@@ -43,42 +126,11 @@ def assert_package_exists(pkg_name: str) -> None:
     elif not os.path.isdir(f"{data_dir}/{pkg_name}"):
         raise Exception(f"package {pkg_name} has no data directory")
 
-def build_package(pkg_name: str, config: PackageConfig) -> None:
-    if config["build"]["type"] == "make":
-        subprocess.run(["make", f"-j{os.cpu_count()}"], cwd=f"{data_dir}/{pkg_name}")
-    elif config["build"]["type"] == "command":
-        subprocess.run(config["build"]["command"], cwd=f"{data_dir}/{pkg_name}", shell=True)
-    else:
-        raise Exception(f"unknown build type {config.build.type}")
-
-def install_package(pkg_name: str, config: PackageConfig) -> None:
-    clone_command = ["git", "clone", config["source"]["remote"], pkg_name, "--depth", "1"]
-    if config["source"]["branch"] is not None:
-        clone_command += ["--branch", config["source"]["branch"]]
-    subprocess.run(clone_command, cwd=data_dir)
-    subprocess.run(["git", "submodule", "update", "--init"], cwd=f"{data_dir}/{pkg_name}")
-    build_package(pkg_name, config)
-    with open(f"{config_dir}/{pkg_name}.json", "w") as f:
-        json.dump(config, f)
-
-def remove_package(pkg_name: str) -> None:
-    assert_package_exists(pkg_name)
-    shutil.rmtree(f"{data_dir}/{pkg_name}")
-    os.remove(f"{config_dir}/{pkg_name}.json")
-
-def update_package(pkg_name: str) -> None:
-    assert_package_exists(pkg_name)
-    with open(f"{config_dir}/{pkg_name}.json") as f:
-        config: PackageConfig = json.load(f)
-    subprocess.run(["git", "pull"], cwd=f"{data_dir}/{pkg_name}")
-    subprocess.run(["git", "submodule", "update"], cwd=f"{data_dir}/{pkg_name}")
-    build_package(pkg_name, config)
-
 def update_packages() -> None:
     for pkg in os.listdir(config_dir):
         if not pkg.endswith(".json"):
             continue
-        update_package(pkg[:-5])
+        Package.from_name(pkg[:-5]).update()
 
 def main() -> None:
     if not os.path.isdir(data_dir):
@@ -113,32 +165,34 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.command == "install":
-        config = PackageConfig(
-            source = GitSourceConfig(type="git", remote=args.repo, branch=args.branch),
-            build = MakeBuildConfig(type="make") if args.build is None else CommandBuildConfig(type="command", command=args.build)
+        package = Package(
+            args.name,
+            GitSourceConfig(args.repo, args.branch),
+            MakeBuildConfig() if args.build is None else CommandBuildConfig(command=args.build)
         )
-        install_package(args.name, config)
+        package.install()
     elif args.command == "install-config":
         with open(args.config) as f:
             config = json.load(f)
-        install_package(args.name, config)
+        package = Package.from_json(args.name, config)
+        package.install()
     elif args.command == "remove":
         for name in args.name:
-            remove_package(name)
+            package = Package.from_name(name)
+            package.remove()
     elif args.command == "update":
         if len(args.name) == 0:
             update_packages()
         else:
             for name in args.name:
-                update_package(name)
+                package = Package.from_name(name)
+                package.update()
     elif args.command == "reset":
         shutil.rmtree(data_dir)
         shutil.rmtree(config_dir)
     elif args.command == "get-config":
-        assert_package_exists(args.name)
-        with open(f"{config_dir}/{args.name}.json") as f:
-            config = json.load(f)
-        print(json.dumps(config, indent=4))
+        package = Package.from_name(args.name)
+        print(json.dumps(package.to_json(), indent=4))
     else:
         parser.print_help()
         parser.exit(1)
