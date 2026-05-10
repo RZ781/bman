@@ -126,11 +126,12 @@ def assert_package_exists(pkg_name: str) -> None:
     elif not os.path.isdir(f"{data_dir}/{pkg_name}"):
         raise Exception(f"package {pkg_name} has no data directory")
 
+def list_packages() -> list[str]:
+    return [pkg[:-5] for pkg in os.listdir(config_dir) if pkg.endswith(".json")]
+
 def update_packages() -> None:
-    for pkg in os.listdir(config_dir):
-        if not pkg.endswith(".json"):
-            continue
-        Package.from_name(pkg[:-5]).update()
+    for pkg in list_packages():
+        Package.from_name(pkg).update()
 
 def main() -> None:
     if not os.path.isdir(data_dir):
@@ -158,6 +159,8 @@ def main() -> None:
     update.add_argument("name", nargs="*", help="package names")
 
     subparsers.add_parser("reset", help="delete all packages and data")
+
+    subparsers.add_parser("list", help="list all packages")
 
     get_config = subparsers.add_parser("get-config", help="print the json config for a package")
     get_config.add_argument("name", help="package name")
@@ -193,6 +196,9 @@ def main() -> None:
     elif args.command == "get-config":
         package = Package.from_name(args.name)
         print(json.dumps(package.to_json(), indent=4))
+    elif args.command == "list":
+        for pkg in list_packages():
+            print(pkg)
     else:
         parser.print_help()
         parser.exit(1)
