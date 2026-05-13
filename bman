@@ -31,8 +31,12 @@ class SourceConfig:
         if json["type"] == "git":
             if "remote" not in json:
                 raise Exception("git configuration does not contain remote")
+            elif not isinstance(json["remote"], str):
+                raise Exception("git remote is not a string")
             elif "branch" not in json:
                 raise Exception("git configuration does not contain branch")
+            elif not isinstance(json["branch"], str):
+                raise Exception("git branch is not a string")
             return GitSourceConfig(json["remote"], json["branch"])
         else:
             raise Exception(f"source configuration has unknown type {json["type"]}")
@@ -65,6 +69,8 @@ class BuildConfig:
         elif json["type"] == "command":
             if "command" not in json:
                 raise Exception("command build configuration does not contain command")
+            elif not isinstance(json["command"], str):
+                raise Exception("command is not a string")
             return CommandBuildConfig(json["command"])
         else:
             raise Exception(f"build configuration has unknown type {json["type"]}")
